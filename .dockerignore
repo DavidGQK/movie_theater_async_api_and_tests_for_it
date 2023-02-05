@@ -1,0 +1,6 @@
+/venv
+/scripts
+/schema_design
+/sqlite_to_postgres
+/elastic_search_free
+.env

@@ -1,0 +1,59 @@
+version: '3'
+
+services:
+  movies-async-api:
+    image: movies-async-api
+    build:
+      context: ../../async_api
+      dockerfile: Dockerfile
+    container_name: movies-async-api
+    command: >
+      uvicorn main:app
+        --host 0.0.0.0
+        --port 8000
+        --use-colors
+        --reload
+    volumes:
+      # no need to rebuild after code has changed, uvicorn runs with flag --reload, 
+      # You need to rebuild only with change of dependencies
+      - "../../async_api/src:/code"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - movies-elastic
+      - movies-redis
+    environment:
+      - "ES_HOST=http://movies-elastic:9200"
+      - "REDIS_HOST=movies-redis"
+
+  movies-elastic:
+    container_name: movies-elastic
+    image: elasticsearch:7.7.0 #docker.elastic.co/elasticsearch/elasticsearch:7.14.1 
+    environment:
+      - "discovery.type=single-node"
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+
+  movies-redis:
+    container_name: movies-redis
+    image: redis:6.2.6-alpine
+    ports:
+      - "6379:6379"
+
+  movies-tests:
+    container_name: movies-tests
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      bash -c "./wait_for_it.sh movies-redis:6379 -- ./wait_for_it.sh movies-elastic:9200 --
+      python utils/connections.py && pytest ."
+    depends_on:
+      - movies-elastic
+      - movies-redis
+      - movies-async-api
+    environment:
+      - "ES_HOST=http://movies-elastic:9200"
+      - "REDIS_HOST=movies-redis"
+      - "ASYNC_API_HOST=http://movies-async-api:8000/api/v1"
